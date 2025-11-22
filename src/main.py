@@ -1,9 +1,16 @@
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+
+
+# This script trains a LeNet-like CNN on MNIST and evaluates robustness using
+# a multi-step PGD (Projected Gradient Descent) adversarial attack.
+# PGD iteratively applies small FGSM-like steps and projects back into an
+# epsilon-ball around the original image, providing a stronger attack.
 
 
 
@@ -112,33 +119,52 @@ def test_accuracy(model, loader, device):
 
 
 #----------------------------
-# 5. FGSM attack
+# 5. PGD attack
 # ---------------------------
-def fgsm_attack(model, images, labels, epsilon, device):
+def pgd_attack(model, images, labels, epsilon, alpha, num_iters, device):
     """
-    x_adv = x + epsilon * sign(grad_x L(model(x), y))
+    Multi-step PGD (Projected Gradient Descent) attack.
+
+    Starts from the clean image and iteratively performs:
+        x_{t+1} = Π_{B_eps(x0)} ( x_t + alpha * sign(∇_x L(model(x_t), y)) )
+
+    where Π_{B_eps(x0)} projects back into the L-infinity epsilon-ball
+    around the original image x0 and clips to the valid pixel range [0, 1].
+
+    This is a stronger attack than single-step FGSM because it takes
+    multiple smaller steps instead of one big step.
     """
     images = images.clone().detach().to(device)
     labels = labels.clone().detach().to(device)
 
-    images.requires_grad = True
+    # Start from the original images (could also add small random noise here)
+    adv_images = images.clone().detach()
 
     model.eval()
-    outputs = model(images)
-    loss = nn.CrossEntropyLoss()(outputs, labels)
-    model.zero_grad()
-    loss.backward()
+    for _ in range(num_iters):
+        adv_images.requires_grad = True
 
-    sign_grad = images.grad.data.sign()
-    adv_images = images + epsilon * sign_grad
-    adv_images = torch.clamp(adv_images, 0, 1)
+        outputs = model(adv_images)
+        loss = nn.CrossEntropyLoss()(outputs, labels)
+        model.zero_grad()
+        loss.backward()
 
-    return adv_images.detach()
+        with torch.no_grad():
+            grad_sign = adv_images.grad.sign()
+            adv_images = adv_images + alpha * grad_sign
+
+            # Project perturbation back into the epsilon L-infinity ball
+            delta = torch.clamp(adv_images - images, min=-epsilon, max=epsilon)
+            adv_images = torch.clamp(images + delta, 0, 1)
+
+        adv_images = adv_images.detach()
+
+    return adv_images
 
 
-def attack_success_rate(model, loader, epsilon, device):
+def attack_success_rate(model, loader, epsilon, alpha, num_iters, device):
     """
-    ASR = fraction of perturbed samples that are misclassified.
+    ASR = fraction of perturbed samples that are misclassified under PGD.
     """
     model.eval()
     total = 0
@@ -147,7 +173,7 @@ def attack_success_rate(model, loader, epsilon, device):
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
 
-        adv_images = fgsm_attack(model, images, labels, epsilon, device)
+        adv_images = pgd_attack(model, images, labels, epsilon, alpha, num_iters, device)
         outputs = model(adv_images)
         _, predicted = torch.max(outputs, 1)
 
@@ -160,12 +186,12 @@ def attack_success_rate(model, loader, epsilon, device):
 # ---------------------------
 # 6. Visualization
 # ---------------------------
-def show_adversarial_example(model, loader, epsilon, device):
+def show_adversarial_example(model, loader, epsilon, alpha, num_iters, device):
     model.eval()
     images, labels = next(iter(loader))
     images, labels = images.to(device), labels.to(device)
 
-    adv_images = fgsm_attack(model, images, labels, epsilon, device)
+    adv_images = pgd_attack(model, images, labels, epsilon, alpha, num_iters, device)
 
     idx = 0  # just show the first example
     clean_img = images[idx].cpu().squeeze()
@@ -209,17 +235,20 @@ def main():
     clean_acc = test_accuracy(model, testloader, device)
     print(f"Clean Test Accuracy: {clean_acc:.2f}%")
 
-    # 5) FGSM attacks for different epsilons
+    # 5) PGD attacks for different epsilons
     epsilons = [0.05, 0.1, 0.2]
-    print("\n=== FGSM Attack Success Rates ===")
+    alpha = 0.01       # step size for each PGD iteration
+    num_iters = 40     # number of PGD steps
+
+    print("\n=== PGD Attack Success Rates ===")
     print("epsilon\tASR (%)")
     for eps in epsilons:
-        asr = attack_success_rate(model, testloader, eps, device)
+        asr = attack_success_rate(model, testloader, eps, alpha, num_iters, device)
         print(f"{eps:.2f}\t{asr * 100:.2f}")
 
     # 6) Show a visual example for one epsilon
-    print("\nShowing adversarial example for epsilon = 0.1")
-    show_adversarial_example(model, testloader, epsilon=0.1, device=device)
+    print("\nShowing PGD adversarial example for epsilon = 0.1")
+    show_adversarial_example(model, testloader, epsilon=0.1, alpha=alpha, num_iters=num_iters, device=device)
 
 
 if __name__ == "__main__":
