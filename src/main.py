@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 
 
 
@@ -110,80 +111,80 @@ def test_accuracy(model, loader, device):
     return acc
 
 
+#----------------------------
+# 5. FGSM attack
 # ---------------------------
-# # 5. FGSM attack
-# # ---------------------------
-# def fgsm_attack(model, images, labels, epsilon, device):
-#     """
-#     x_adv = x + epsilon * sign(grad_x L(model(x), y))
-#     """
-#     images = images.clone().detach().to(device)
-#     labels = labels.clone().detach().to(device)
+def fgsm_attack(model, images, labels, epsilon, device):
+    """
+    x_adv = x + epsilon * sign(grad_x L(model(x), y))
+    """
+    images = images.clone().detach().to(device)
+    labels = labels.clone().detach().to(device)
 
-#     images.requires_grad = True
+    images.requires_grad = True
 
-#     model.eval()
-#     outputs = model(images)
-#     loss = nn.CrossEntropyLoss()(outputs, labels)
-#     model.zero_grad()
-#     loss.backward()
+    model.eval()
+    outputs = model(images)
+    loss = nn.CrossEntropyLoss()(outputs, labels)
+    model.zero_grad()
+    loss.backward()
 
-#     sign_grad = images.grad.data.sign()
-#     adv_images = images + epsilon * sign_grad
-#     adv_images = torch.clamp(adv_images, 0, 1)
+    sign_grad = images.grad.data.sign()
+    adv_images = images + epsilon * sign_grad
+    adv_images = torch.clamp(adv_images, 0, 1)
 
-#     return adv_images.detach()
+    return adv_images.detach()
 
 
-# def attack_success_rate(model, loader, epsilon, device):
-#     """
-#     ASR = fraction of perturbed samples that are misclassified.
-#     """
-#     model.eval()
-#     total = 0
-#     fooled = 0
+def attack_success_rate(model, loader, epsilon, device):
+    """
+    ASR = fraction of perturbed samples that are misclassified.
+    """
+    model.eval()
+    total = 0
+    fooled = 0
 
-#     for images, labels in loader:
-#         images, labels = images.to(device), labels.to(device)
+    for images, labels in loader:
+        images, labels = images.to(device), labels.to(device)
 
-#         adv_images = fgsm_attack(model, images, labels, epsilon, device)
-#         outputs = model(adv_images)
-#         _, predicted = torch.max(outputs, 1)
+        adv_images = fgsm_attack(model, images, labels, epsilon, device)
+        outputs = model(adv_images)
+        _, predicted = torch.max(outputs, 1)
 
-#         total += labels.size(0)
-#         fooled += (predicted != labels).sum().item()
+        total += labels.size(0)
+        fooled += (predicted != labels).sum().item()
 
-#     return fooled / total
+    return fooled / total
 
 
-# # ---------------------------
-# # 6. Visualization
-# # ---------------------------
-# def show_adversarial_example(model, loader, epsilon, device):
-#     model.eval()
-#     images, labels = next(iter(loader))
-#     images, labels = images.to(device), labels.to(device)
+# ---------------------------
+# 6. Visualization
+# ---------------------------
+def show_adversarial_example(model, loader, epsilon, device):
+    model.eval()
+    images, labels = next(iter(loader))
+    images, labels = images.to(device), labels.to(device)
 
-#     adv_images = fgsm_attack(model, images, labels, epsilon, device)
+    adv_images = fgsm_attack(model, images, labels, epsilon, device)
 
-#     idx = 0  # just show the first example
-#     clean_img = images[idx].cpu().squeeze()
-#     adv_img = adv_images[idx].cpu().squeeze()
+    idx = 0  # just show the first example
+    clean_img = images[idx].cpu().squeeze()
+    adv_img = adv_images[idx].cpu().squeeze()
 
-#     plt.figure(figsize=(6, 3))
+    plt.figure(figsize=(6, 3))
 
-#     plt.subplot(1, 2, 1)
-#     plt.title("Clean")
-#     plt.imshow(clean_img, cmap="gray")
-#     plt.axis("off")
+    plt.subplot(1, 2, 1)
+    plt.title("Clean")
+    plt.imshow(clean_img, cmap="gray")
+    plt.axis("off")
 
-#     plt.subplot(1, 2, 2)
-#     plt.title(f"Adversarial (ε={epsilon})")
-#     plt.imshow(adv_img, cmap="gray")
-#     plt.axis("off")
+    plt.subplot(1, 2, 2)
+    plt.title(f"Adversarial (ε={epsilon})")
+    plt.imshow(adv_img, cmap="gray")
+    plt.axis("off")
 
-#     plt.tight_layout()
-#     plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
 # ---------------------------
@@ -208,17 +209,17 @@ def main():
     clean_acc = test_accuracy(model, testloader, device)
     print(f"Clean Test Accuracy: {clean_acc:.2f}%")
 
-    # # 5) FGSM attacks for different epsilons
-    # epsilons = [0.05, 0.1, 0.2]
-    # print("\n=== FGSM Attack Success Rates ===")
-    # print("epsilon\tASR (%)")
-    # for eps in epsilons:
-    #     asr = attack_success_rate(model, testloader, eps, device)
-    #     print(f"{eps:.2f}\t{asr * 100:.2f}")
+    # 5) FGSM attacks for different epsilons
+    epsilons = [0.05, 0.1, 0.2]
+    print("\n=== FGSM Attack Success Rates ===")
+    print("epsilon\tASR (%)")
+    for eps in epsilons:
+        asr = attack_success_rate(model, testloader, eps, device)
+        print(f"{eps:.2f}\t{asr * 100:.2f}")
 
-    # # 6) Show a visual example for one epsilon
-    # print("\nShowing adversarial example for epsilon = 0.1")
-    # show_adversarial_example(model, testloader, epsilon=0.1, device=device)
+    # 6) Show a visual example for one epsilon
+    print("\nShowing adversarial example for epsilon = 0.1")
+    show_adversarial_example(model, testloader, epsilon=0.1, device=device)
 
 
 if __name__ == "__main__":
