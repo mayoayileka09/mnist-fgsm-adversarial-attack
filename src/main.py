@@ -6,9 +6,9 @@ import torch.optim as optim
 import attacks
 
 
-# ---------------------------
+
 #  Training & Evaluation
-# ---------------------------
+
 def train(net,
     trainloader,
     device: str,
@@ -75,6 +75,7 @@ def main():
     epsilons = [0.05, 0.1, 0.2, 0.3]
     alpha = 0.01       # step size for each PGD iteration
     num_iters = 40     # number of PGD steps
+    samples = [0,1,2,3]
 
     print("\n=== PGD Attack Success Rates ===")
     print("epsilon\tASR (%)")
@@ -83,11 +84,18 @@ def main():
         print(f"{eps:.2f}\t{asr * 100:.2f}")
 
     # 6) Show a visual example for one epsilon
-    print("\nShowing PGD adversarial example for epsilon = 0.1")
-    attacks.show_adversarial_example(net, testloader, epsilon=0.05, alpha=alpha, num_iters=num_iters, device=device)
-    attacks.show_adversarial_example(net, testloader, epsilon=0.1, alpha=alpha, num_iters=num_iters, device=device)
-    attacks.show_adversarial_example(net, testloader, epsilon=0.2, alpha=alpha, num_iters=num_iters, device=device)
-    attacks.show_adversarial_example(net, testloader, epsilon=0.3, alpha=alpha, num_iters=num_iters, device=device)
+    print("\nShowing Visualizations for PGD adversarial example for multiple epsilon values and samples")
+
+    #PGD visualization for 40 iterations
+    attacks.show_adversarial_example(
+        net,
+        testloader,
+        epsilons=epsilons,
+        alpha=alpha,
+        num_iters=num_iters,
+        device=device,
+        samples=samples,
+    )
 
 
 if __name__ == "__main__":

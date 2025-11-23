@@ -69,28 +69,55 @@ def attack_success_rate(model, loader, epsilon, alpha, num_iters, device):
 # ---------------------------
 # 6. Visualization
 # ---------------------------
-def show_adversarial_example(model, loader, epsilon, alpha, num_iters, device):
+def show_adversarial_example(model, loader, epsilons, alpha, num_iters, device, samples=None):
+    """
+    Show clean images and multiple PGD-adversarial versions
+    for different epsilons in a single figure.
+
+    epsilons: iterable of epsilon values (e.g., [0.05, 0.1, 0.2, 0.3])
+    samples: list of indices into the batch (e.g., [0, 1, 2, 3])
+    """
     model.eval()
     images, labels = next(iter(loader))
     images, labels = images.to(device), labels.to(device)
 
-    adv_images = pgd_attack(model, images, labels, epsilon, alpha, num_iters, device)
+    # Default: first 4 samples from the batch if none provided
+    if samples is None or len(samples) == 0:
+        max_samples = min(4, images.size(0))
+        samples = list(range(max_samples))
 
-    idx = 0  # just show the first example
-    clean_img = images[idx].cpu().squeeze()
-    adv_img = adv_images[idx].cpu().squeeze()
+    num_rows = len(samples)
+    num_cols = 1 + len(epsilons)  # clean + one col per epsilon
 
-    plt.figure(figsize=(6, 3))
+    plt.figure(figsize=(4 * num_cols, 3 * num_rows))
 
-    plt.subplot(1, 2, 1)
-    plt.title("Clean")
-    plt.imshow(clean_img, cmap="gray")
-    plt.axis("off")
+    # Precompute adversarial batches for each epsilon (more efficient)
+    adv_batches = {}
+    for eps in epsilons:
+        adv_batches[eps] = pgd_attack(
+            model, images, labels, eps, alpha, num_iters, device
+        )
 
-    plt.subplot(1, 2, 2)
-    plt.title(f"Adversarial (ε={epsilon})")
-    plt.imshow(adv_img, cmap="gray")
-    plt.axis("off")
+    # For each sample (row)
+    for row_idx, sample_idx in enumerate(samples):
+        clean_img = images[sample_idx].cpu().squeeze()
+
+        # Column 1: clean image
+        plt.subplot(num_rows, num_cols, row_idx * num_cols + 1)
+        if row_idx == 0:
+            plt.title("Clean")
+        plt.imshow(clean_img, cmap="gray")
+        plt.axis("off")
+
+        # Columns 2..: adversarial for each epsilon
+        for col_offset, eps in enumerate(epsilons, start=1):
+            adv_img = adv_batches[eps][sample_idx].cpu().squeeze()
+
+            plt.subplot(num_rows, num_cols, row_idx * num_cols + 1 + col_offset)
+            if row_idx == 0:
+                plt.title(f"PGD ε={eps}")
+            plt.imshow(adv_img, cmap="gray")
+            plt.axis("off")
 
     plt.tight_layout()
     plt.show()
