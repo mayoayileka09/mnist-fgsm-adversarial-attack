@@ -1,5 +1,5 @@
 from data_loader import get_dataloaders, get_device
-from model import LeNet
+from model import LeNet,ResNet
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -59,43 +59,52 @@ def main():
     # 1) Data
     trainloader, testloader = get_dataloaders()
 
-    # 2) Model
-    net = LeNet().to(device)
+    # 2) Models (train and evaluate both LeNet and ResNet)
+    models = {
+        "LeNet": LeNet().to(device),
+        "ResNet": ResNet().to(device),
+    }
 
-    # 3) Train baseline model
-    print("\n=== Training baseline model ===")
-    train(net, trainloader, device, epochs=3, lr=0.001)
-
-    # 4) Evaluate clean accuracy
-    print("\n=== Evaluating on clean test set ===")
-    clean_acc = test_accuracy(net, testloader, device)
-    print(f"Clean Test Accuracy: {clean_acc:.2f}%")
-
-    # 5) PGD attacks for different epsilons
+    # Common PGD attack parameters
     epsilons = [0.05, 0.1, 0.2, 0.3]
     alpha = 0.01       # step size for each PGD iteration
     num_iters = 40     # number of PGD steps
-    samples = [0,1,2,3]
+    samples = [0, 1, 2, 3]
 
-    print("\n=== PGD Attack Success Rates ===")
-    print("epsilon\tASR (%)")
-    for eps in epsilons:
-        asr = attacks.attack_success_rate(net, testloader, eps, alpha, num_iters, device)
-        print(f"{eps:.2f}\t{asr * 100:.2f}")
+    for model_name, net in models.items():
+        print(f"\n==============================")
+        print(f"Training and Evaluating: {model_name}")
+        print(f"==============================")
 
-    # 6) Show a visual example for one epsilon
-    print("\nShowing Visualizations for PGD adversarial example for multiple epsilon values and samples")
+        # 3) Train baseline model
+        print("\n=== Training baseline model ===")
+        train(net, trainloader, device, epochs=3, lr=0.001)
 
-    #PGD visualization for 40 iterations
-    attacks.show_adversarial_example(
-        net,
-        testloader,
-        epsilons=epsilons,
-        alpha=alpha,
-        num_iters=num_iters,
-        device=device,
-        samples=samples,
-    )
+        # 4) Evaluate clean accuracy
+        print("\n=== Evaluating on clean test set ===")
+        clean_acc = test_accuracy(net, testloader, device)
+        print(f"[{model_name}] Clean Test Accuracy: {clean_acc:.2f}%")
+
+        # 5) PGD attacks for different epsilons
+        print("\n=== PGD Attack Success Rates ===")
+        print("epsilon\tASR (%)")
+        for eps in epsilons:
+            asr = attacks.attack_success_rate(net, testloader, eps, alpha, num_iters, device)
+            print(f"[{model_name}] {eps:.2f}\t{asr * 100:.2f}")
+
+        # 6) Show visual examples for this model
+        print(f"\nShowing visualizations for PGD adversarial examples for multiple epsilon values and samples on {model_name}")
+        attacks.show_adversarial_example(
+            net,
+            testloader,
+            epsilons=epsilons,
+            alpha=alpha,
+            num_iters=num_iters,
+            device=device,
+            samples=samples,
+        )
+
+    
 
 
 if __name__ == "__main__":
