@@ -68,7 +68,7 @@ def main():
     # Common PGD attack parameters
     epsilons = [0.05, 0.1, 0.2, 0.3]
     alpha = 0.01       # step size for each PGD iteration
-    num_iters = 40     # number of PGD steps
+    num_iters = 40     # number of PGD steps, (20 or 40)
     samples = [0, 1, 2, 3]
 
     for model_name, net in models.items():
